@@ -1,0 +1,48 @@
+# Entorno virtual
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+
+# Entrenamiento RVC
+logs/
+dataset/
+dataset_canto/
+
+# Modelos y checkpoints
+*.pth
+*.pt
+*.ckpt
+*.index
+
+# Audios
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.flac
+
+# Assets pesados de RVC
+assets/hubert_base/
+assets/pretrained/
+assets/pretrained_v2/
+assets/rmvpe/
+assets/weights/
+assets/indices/
+
+# Temporales
+.model-downloads/
+TEMP/
+.cache/
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Sistema
+.DS_Store
+Thumbs.db
