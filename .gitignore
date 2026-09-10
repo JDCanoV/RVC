@@ -46,3 +46,9 @@ TEMP/
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Resultados del procesamiento de canciones
+resultados_cancion/
+
+# Resultados temporales de procesamiento
+resultados_cancion/
