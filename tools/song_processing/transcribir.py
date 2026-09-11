@@ -16,6 +16,32 @@ def cargar_whisper():
 
 
 def transcribir_audio(ruta_audio, idioma="en"):
+    mapa_idiomas = {
+        "inglés": "en",
+        "español": "es",
+        "francés": "fr",
+        "alemán": "de",
+        "italiano": "it",
+        "portugués": "pt",
+        "en": "en",
+        "es": "es",
+        "fr": "fr",
+        "de": "de",
+        "it": "it",
+        "pt": "pt",
+    }
+
+    if isinstance(idioma, (list, tuple)):
+        idioma = idioma[0] if idioma else "en"
+
+    idioma = str(idioma).strip().lower()
+    idioma = mapa_idiomas.get(idioma, idioma)
+
+    print(
+        f"[Whisper] Idioma recibido: {idioma}",
+        flush=True,
+    )
+
     modelo = cargar_whisper()
 
     resultado = modelo.transcribe(
@@ -27,4 +53,5 @@ def transcribir_audio(ruta_audio, idioma="en"):
         condition_on_previous_text=True,
         word_timestamps=True,
     )
+
     return resultado

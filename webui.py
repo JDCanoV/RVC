@@ -59,6 +59,10 @@ from tools.multispeaker import (
     load_manifest,
     write_manifest,
 )
+from tools.song_processing.pipeline import (
+    procesar_cancion,
+    guardar_resultado,
+)
 from train.process_ckpt import (
     change_info,
     extract_small_model,
@@ -1833,6 +1837,153 @@ def change_f0_method(f0method8):
         visible = False
     return {"visible": visible, "__type__": "update"}
 
+def procesar_cancion_webui(audio, idioma):
+    """
+    Ejecuta el pipeline completo de procesamiento de canciones
+    desde la interfaz de Gradio.
+
+    Flujo:
+        audio
+        -> separación voz/instrumental
+        -> Whisper
+        -> traducción
+        -> JSON/TXT
+    """
+
+    if not audio:
+        raise gr.Error("Selecciona una canción primero.")
+
+    try:
+        ruta_audio = pathlib.Path(audio).resolve()
+
+        if not ruta_audio.exists():
+            raise gr.Error(
+                f"No se encontró el archivo:\n{ruta_audio}"
+            )
+
+        nombre_cancion = ruta_audio.stem
+
+        carpeta_salida = (
+            pathlib.Path(now_dir)
+            / "resultados_cancion"
+            / nombre_cancion
+        )
+
+        carpeta_salida.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        yield (
+            "🎵 Iniciando procesamiento...\n"
+            "Preparando canción.",
+            None,
+            None,
+            None,
+            None,
+        )
+
+        yield (
+            "🎵 Procesando canción...\n\n"
+            "1/3 Separando voz e instrumental con PyMSS...",
+            None,
+            None,
+            None,
+            None,
+        )
+
+        print(
+            f"[DEBUG] idioma recibido: {idioma!r} | "
+            f"tipo: {type(idioma)}",
+            flush=True,
+        )
+
+        resultado = procesar_cancion(
+            ruta_audio,
+            carpeta_salida,
+            idioma=idioma,
+        )
+
+        voz = resultado["voz"]
+        instrumental = resultado["instrumental"]
+
+        yield (
+            "🎵 Procesamiento completado.\n\n"
+            "1/3 Separación: ✓\n"
+            "2/3 Transcripción: ✓\n"
+            "3/3 Traducción: ✓",
+            str(voz),
+            str(instrumental),
+            None,
+            None,
+        )
+
+        ruta_json = (
+            carpeta_salida
+            / "cancion_procesada.json"
+        )
+
+        guardar_resultado(
+            resultado,
+            ruta_json,
+        )
+
+        ruta_txt = (
+            carpeta_salida
+            / "cancion_traduccion.txt"
+        )
+
+        with open(
+            ruta_txt,
+            "w",
+            encoding="utf-8",
+        ) as archivo:
+
+            for segmento in resultado["traducciones"]:
+                archivo.write(
+                    f"[{segmento['start']:.2f}s - "
+                    f"{segmento['end']:.2f}s]\n"
+                )
+
+                archivo.write(
+                    f"Original: "
+                    f"{segmento['original']}\n"
+                )
+
+                archivo.write(
+                    f"Traducción: "
+                    f"{segmento['traduccion']}\n\n"
+                )
+
+        yield (
+            "🎵 Procesamiento completado.\n\n"
+            "1/3 Separación: ✓\n"
+            "2/3 Transcripción: ✓\n"
+            "3/3 Traducción: ✓\n\n"
+            f"Segmentos traducidos: "
+            f"{len(resultado['traducciones'])}",
+            str(voz),
+            str(instrumental),
+            str(ruta_json),
+            str(ruta_txt),
+        )
+
+    except gr.Error:
+        raise
+
+    except Exception:
+        error = traceback.format_exc()
+
+        print(error, flush=True)
+
+        yield (
+            "❌ Error procesando la canción:\n\n"
+            f"{error}",
+            None,
+            None,
+            None,
+            None,
+        )
 
 with gr.Blocks(title="RVC WebUI", css=TRAINING_INFO_CSS) as app:
     gr.Markdown("## RVC WebUI")
@@ -2178,9 +2329,98 @@ with gr.Blocks(title="RVC WebUI", css=TRAINING_INFO_CSS) as app:
                 [train_status, train_button, stop_train_button],
                 queue=False,
             )
+                # ==============================================================
+        # 3. CANCIONES
+        # ==============================================================
+        with gr.TabItem("🎵 Canciones"):
+            gr.Markdown(
+                """
+                ## Procesamiento de canciones
+
+                Esta sección prepara una canción para una futura
+                traducción cantada con tu modelo RVC.
+
+                Flujo actual:
+
+                **Canción → separación → Whisper → traducción**
+
+                La generación del canto todavía no se ejecuta.
+                """
+            )
+
+            song_audio = gr.Audio(
+                label="Canción",
+                source="upload",
+                type="filepath",
+                interactive=True,
+            )
+
+            song_language = gr.Dropdown(
+                label="Idioma de la canción",
+                choices=[
+                    ("Inglés", "en"),
+                    ("Español", "es"),
+                    ("Francés", "fr"),
+                    ("Alemán", "de"),
+                    ("Italiano", "it"),
+                    ("Portugués", "pt"),
+                ],
+                value="en",
+                multiselect=False,
+                interactive=True,
+            )
+
+            song_process_button = gr.Button(
+                "🎵 Procesar canción",
+                variant="primary",
+            )
+
+            song_status = gr.Textbox(
+                label="Estado",
+                value="",
+                lines=12,
+                max_lines=20,
+                interactive=False,
+            )
+
+            with gr.Row():
+                song_vocals = gr.Audio(
+                    label="🎤 Voz separada",
+                    type="filepath",
+                )
+
+                song_instrumental = gr.Audio(
+                    label="🎼 Instrumental",
+                    type="filepath",
+                )
+
+            with gr.Row():
+                song_json = gr.File(
+                    label="📄 Resultado JSON",
+                )
+
+                song_txt = gr.File(
+                    label="📄 Traducción TXT",
+                )
+
+            song_process_button.click(
+                procesar_cancion_webui,
+                inputs=[
+                    song_audio,
+                    song_language,
+                ],
+                outputs=[
+                    song_status,
+                    song_vocals,
+                    song_instrumental,
+                    song_json,
+                    song_txt,
+                ],
+                api_name="song_process",
+            )
 
         # ==============================================================
-        # 3. MULTISPEAKER
+        # 4. MULTISPEAKER
         # ==============================================================
         with gr.TabItem("👥 Multispeaker"):
             gr.Markdown(
